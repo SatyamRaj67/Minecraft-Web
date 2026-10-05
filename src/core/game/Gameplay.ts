@@ -1,8 +1,4 @@
-import {
-  GameplayContext,
-  InventoryContext,
-  PauseContext,
-} from "../input/Actions";
+import { GameplayContext, InventoryContext, PauseContext } from "./Actions";
 import type { InputManager } from "../input/InputManager";
 
 const LOOK_LOCK = 0.02;
@@ -17,8 +13,21 @@ const JUMP_VELOCITY = 8;
 
 const GRAVITY = 25;
 
+// === Debug Snapshot ===
+export interface GameplayDebugSnapshot {
+  player: {
+    x: number;
+    y: number;
+    z: number;
+    vy: number;
+    yaw: number;
+    pitch: number;
+    onGround: boolean;
+  }
+}
+
 export class Gameplay {
-  readonly player = {
+  static readonly player = {
     x: 0,
     y: 0,
     z: 0,
@@ -31,8 +40,8 @@ export class Gameplay {
   private readonly input: InputManager;
   private mode: "gameplay" | "pause" | "inventory" = "gameplay";
 
-  private readonly move = { x: 0, y: 0 };
-  private readonly look = { x: 0, y: 0 };
+  private static readonly move = { x: 0, y: 0 };
+  private static readonly look = { x: 0, y: 0 };
 
   constructor(input: InputManager) {
     this.input = input;
@@ -40,7 +49,8 @@ export class Gameplay {
 
   //   === Update Methods ===
   update(dt: number): void {
-    const { input, player: p } = this;
+    const { input } = this;
+    const p = Gameplay.player;
 
     if (this.mode === "pause") {
       if (input.justPressed("pause")) this.closeOverlay();
@@ -55,12 +65,12 @@ export class Gameplay {
     if (input.justPressed("inventory")) return this.openInventory();
 
     // === Camera Movement ===
-    input.look(this.look, dt);
-    p.yaw += this.look.x;
+    input.look(Gameplay.look, dt);
+    p.yaw += Gameplay.look.x;
     p.pitch = Math.max(
       -(Math.PI / 2) + LOOK_LOCK,
       Math.min(Math.PI / 2 - LOOK_LOCK),
-      p.pitch - this.look.y,
+      p.pitch - Gameplay.look.y,
     );
 
     // === Player Movement ===
@@ -69,7 +79,7 @@ export class Gameplay {
       "moveBackward",
       "moveLeft",
       "moveRight",
-      this.move,
+      Gameplay.move,
     );
     const speed = input.pressed("sprint")
       ? SPRINT_SPEED
@@ -82,8 +92,8 @@ export class Gameplay {
     const rx = Math.cos(p.yaw),
       rz = Math.sin(p.yaw); // Right vector
 
-    p.x += (fx * this.move.y + rx * this.move.x) * speed * dt;
-    p.z += (fz * this.move.y + rz * this.move.x) * speed * dt;
+    p.x += (fx * Gameplay.move.y + rx * Gameplay.move.x) * speed * dt;
+    p.z += (fz * Gameplay.move.y + rz * Gameplay.move.x) * speed * dt;
 
     // == Jumping ===
     if (input.justPressed("jump") && p.onGround) {
@@ -113,7 +123,6 @@ export class Gameplay {
     if (input.justPressed("use")) {
       // this.use();
     }
-
   }
 
   //   === Gameplay Actions ===
@@ -141,4 +150,11 @@ export class Gameplay {
   }
 
   //   === Camera Methods ===
+
+  // === Debug ===
+  static snapshot(): GameplayDebugSnapshot {
+    return {
+      player: { ...Gameplay.player },
+    };
+  }
 }

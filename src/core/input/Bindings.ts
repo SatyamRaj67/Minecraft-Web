@@ -4,7 +4,7 @@ import {
   DEFAULT_BINDINGS,
   type Action,
   type ControlId,
-} from "./Actions";
+} from "../game/Actions";
 
 const STORAGE_KEY = "MINECRAFT_WEB:keybind.v1";
 
@@ -22,6 +22,27 @@ export class Bindings {
 
   get(action: Action): readonly ControlId[] {
     return this.current[action];
+  }
+
+  rebind(action: Action, control: ControlId): void {
+    const others = this.current[action].filter(
+      (c) => deviceGroup(c) !== deviceGroup(control),
+    );
+    this.current[action] = [control, ...others];
+    Logger.info(`Rebound ${action} to ${control}.`);
+    this.save();
+  }
+
+  unbind(action: Action, control: ControlId): void {
+    this.current[action] = this.current[action].filter((c) => c !== control);
+    Logger.info(`Unbound ${control} from action ${action}.`);
+    this.save();
+  }
+
+  reset(): void {
+    this.applyDefaults();
+    Logger.info("Resetting key bindings to defaults.");
+    this.save();
   }
 
   //   === Private Methods ===
@@ -49,6 +70,7 @@ export class Bindings {
 
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(overrides));
+      Logger.info("Saved key bindings to localStorage successfully.");
     } catch (error) {
       Logger.warn("Failed to save key bindings to localStorage:", error);
     }

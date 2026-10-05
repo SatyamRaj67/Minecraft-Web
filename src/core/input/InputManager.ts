@@ -4,13 +4,11 @@ import {
   type Action,
   type ControlId,
   type InputContext,
-} from "./Actions";
+} from "../game/Actions";
 import { Bindings, deviceGroup } from "./Bindings";
-import {
-  GamepadDevice,
-  KeyboardMouseDevice,
-  type InputDevice,
-} from "./Devices";
+import { type InputDevice } from "./devices/Devices";
+import { GamepadDevice } from "./devices/GamepadDevice";
+import { KeyboardMouseDevice } from "./devices/KBMDevices";
 
 /** A control counts as pressed if its value is greater than or equal to this threshold. */
 const PRESS_THRESHOLD = 0.5;
@@ -20,21 +18,7 @@ export interface ActionState {
   pressed: boolean;
   justPressed: boolean;
   justReleased: boolean;
-}
-
-export interface InputDebugAction {
-  action: Action;
-  value: number;
-  pressed: boolean;
-  justPressed: boolean;
-  justReleased: boolean;
-  bindings: readonly ControlId[];
-}
-
-export interface InputDebugSnapshot {
-  controls: readonly ControlId[];
-  actions: readonly InputDebugAction[];
-  context: string | null;
+  activeControls: readonly ControlId[];
 }
 
 export type DeviceKind = "keyboard" | "gamepad";
@@ -81,31 +65,11 @@ export class InputManager {
         pressed: false,
         justPressed: false,
         justReleased: false,
+        activeControls: [],
       };
 
     const { signal } = this.ac;
-
-    // === Pointer Lock Lost ===
-    document.addEventListener(
-      "pointerlockchange",
-      () => {
-        const locked = document.pointerLockElement === canvas;
-
-        if (!locked && this.cursorMode() === "locked") {
-          this.onPointerLockLost?.();
-        }
-      },
-      { signal },
-    );
-
-    // === Click to Lock Pointer ===
-    canvas.addEventListener(
-      "click",
-      () => {
-        this.requestPointerLock();
-      },
-      { signal },
-    );
+    this.attach(canvas, signal);
   }
 
   //   === Context Stack Methods ===
@@ -171,17 +135,19 @@ export class InputManager {
 
         let value = 0;
         let edge = false;
+        const activeControls: ControlId[] = [];
 
         for (const control of this.bindings.get(action)) {
           if (this.consumed.has(control)) continue;
 
           const controlValue = this.curr.get(control) ?? 0;
           if (controlValue > value) value = controlValue;
+          if (controlValue >= PRESS_THRESHOLD) activeControls.push(control);
           // * EDGES: We only want to trigger an edge if the control is not already down, otherwise it will trigger every frame while the control is held down.
           if (controlValue >= PRESS_THRESHOLD && !this.wasDown(control))
             edge = true;
         }
-        this.apply(action, value, edge);
+        this.apply(action, value, edge, activeControls);
       }
       //   Model: Block all inputs below the current context if "all" is set
       if (ctx.blocking === "all") break;
@@ -202,7 +168,12 @@ export class InputManager {
     return (this.prev.get(id) ?? 0) >= PRESS_THRESHOLD;
   }
 
-  private apply(action: Action, value: number, edge: boolean): void {
+  private apply(
+    action: Action,
+    value: number,
+    edge: boolean,
+    activeControls: readonly ControlId[] = [],
+  ): void {
     const s = this.state[action];
     const pressed = value >= PRESS_THRESHOLD;
 
@@ -210,6 +181,31 @@ export class InputManager {
     s.justReleased = s.pressed && !pressed;
     s.pressed = pressed;
     s.value = value;
+    s.activeControls = activeControls;
+  }
+
+  private attach(canvas: HTMLCanvasElement, signal: AbortSignal): void {
+    // === Pointer Lock Lost ===
+    document.addEventListener(
+      "pointerlockchange",
+      () => {
+        const locked = document.pointerLockElement === canvas;
+
+        if (!locked && this.cursorMode() === "locked") {
+          this.onPointerLockLost?.();
+        }
+      },
+      { signal },
+    );
+
+    // === Click to Lock Pointer ===
+    canvas.addEventListener(
+      "click",
+      () => {
+        this.requestPointerLock();
+      },
+      { signal },
+    );
   }
 
   //   === Input State Methods ===
@@ -224,30 +220,6 @@ export class InputManager {
   }
   value(action: Action): number {
     return this.state[action].value;
-  }
-
-  debugSnapshot(): InputDebugSnapshot {
-    const controls = [...this.curr.entries()]
-      .filter(([, value]) => value >= PRESS_THRESHOLD)
-      .map(([id]) => id);
-
-    const actions = ACTIONS.map((action) => {
-      const state = this.state[action];
-      return {
-        action,
-        value: state.value,
-        pressed: state.pressed,
-        justPressed: state.justPressed,
-        justReleased: state.justReleased,
-        bindings: this.bindings.get(action),
-      };
-    });
-
-    return {
-      controls,
-      actions,
-      context: this.top?.id ?? null,
-    };
   }
 
   /** Can be used for two opposing actions */
@@ -320,10 +292,10 @@ export class InputManager {
 
     try {
       void Promise.resolve(this.canvas.requestPointerLock()).catch(() => {
-        // * User Escaped
+        // User Escaped
       });
     } catch {
-      // * Older Browsers
+      // Older Browsers
       Logger.warn("Pointer Lock API is not supported in this browser.");
     }
   }
@@ -337,8 +309,35 @@ export class InputManager {
       document.exitPointerLock();
   }
 
+  // === Debug ===
+  snapshot() {
+    // Return active key press and the action caused by it
+    const active: Array<{
+      action: Action;
+      value: number;
+      pressed: boolean;
+      bindings: readonly ControlId[];
+      activeControls: readonly ControlId[];
+    }> = [];
+    for (const action of ACTIONS) {
+      const state = this.state[action];
+      if (state.pressed) {
+        active.push({
+          action,
+          value: state.value,
+          pressed: state.pressed,
+          bindings: this.bindings.get(action),
+          activeControls: state.activeControls,
+        });
+      }
+    }
+    return active;
+  }
+
+  // === Destroy ===
   destroy(): void {
     this.ac.abort();
-    this.kbm.destroy();
+
+    for (const device of this.devices) device.destroy();
   }
 }

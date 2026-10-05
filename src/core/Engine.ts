@@ -5,7 +5,7 @@ import { Logger } from "../debug/Logger";
 import { GPUContext } from "../gpu/gpuContext";
 import { Renderer } from "../renderer/Renderer";
 import { Gameplay } from "./game/Gameplay";
-import { GameplayContext } from "./input/Actions";
+import { GameplayContext } from "./game/Actions";
 import { InputManager } from "./input/InputManager";
 
 export interface EngineConfig {
@@ -47,7 +47,7 @@ export class Engine {
     // === Debug Overlay ===
     this.debugOverlay = new DebugOverlay(
       config.canvas.parentElement ?? document.body,
-      this.inputManager
+      this.inputManager,
     );
     this.debugOverlay.resize(
       config.canvas.clientWidth,
@@ -94,7 +94,7 @@ export class Engine {
 
     if (dt > 0.1) dt = 0.1; // clamp to 100ms
     FrameStats.beginFrame();
-    
+
     // Render Frame
     this.inputManager.update();
     this.game.update(dt);
