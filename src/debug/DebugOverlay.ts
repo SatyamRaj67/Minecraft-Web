@@ -1,6 +1,10 @@
 import { assert } from "./Assert";
 import { FrameStats } from "./FrameStats";
 import { Logger } from "./Logger";
+import type {
+  InputDebugSnapshot,
+  InputManager,
+} from "../core/input/InputManager";
 
 const FRAME_MS_GREEN = 10; // < 10ms: good
 const FRAME_MS_YELLOW = 14; // < 14ms: acceptable
@@ -18,12 +22,15 @@ export class DebugOverlay {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private visible = true;
+  private inputManager: InputManager;
 
-  constructor(parentElement: HTMLElement) {
+  constructor(parentElement: HTMLElement, inputManager: InputManager) {
     this.canvas = document.createElement("canvas");
     this.canvas.style.zIndex = "10000";
     this.canvas.style.pointerEvents = "none";
     parentElement.appendChild(this.canvas);
+
+    this.inputManager = inputManager;
 
     const ctx = this.canvas.getContext("2d");
     assert(ctx !== null, "Failed to get 2D context for debug overlay canvas", {
@@ -52,6 +59,8 @@ export class DebugOverlay {
   }
 
   render(gpuTimings?: Map<string, number>): void {
+    if (this.inputManager.justPressed("debug")) this.toggle();
+
     if (!this.visible) return;
 
     const ctx = this.ctx;
@@ -112,6 +121,9 @@ export class DebugOverlay {
       y += lineH;
     }
 
+    const input = this.inputManager.debugSnapshot();
+    if (input) this.renderInput(ctx, input, padX, padY, lineH);
+
     if (gpuTimings && gpuTimings.size > 0) {
       const rightPanelW = 200;
       const rightX = this.canvas.width - rightPanelW - padX;
@@ -138,6 +150,53 @@ export class DebugOverlay {
         ry += lineH;
       }
     }
+  }
+
+  private renderInput(
+    ctx: CanvasRenderingContext2D,
+    input: InputDebugSnapshot,
+    padX: number,
+    padY: number,
+    lineH: number,
+  ): void {
+    const activeActions = input.actions.filter(
+      (entry) => entry.pressed || entry.justPressed || entry.justReleased,
+    );
+    const activeControls = input.controls.length
+      ? input.controls.map((control) => this.controlName(control)).join(", ")
+      : "none";
+    const rows = [
+      `Context: ${input.context ?? "none"}`,
+      `Keys: ${activeControls}`,
+      ...activeActions.map((entry) => {
+        const marker = entry.justPressed
+          ? "down"
+          : entry.justReleased
+            ? "up"
+            : "hold";
+        return `${marker} ${entry.action} (${this.controlName(entry.bindings[0] ?? "")})`;
+      }),
+    ];
+    const panelW = 360;
+    const panelH = (rows.length + 1) * lineH + padY * 2;
+    const x = padX;
+    const y = padY + 8 * lineH + padY * 2 + 8;
+
+    ctx.fillStyle = PANEL_BG;
+    ctx.beginPath();
+    ctx.roundRect(x, y, panelW, panelH, 4);
+    ctx.fill();
+
+    ctx.fillStyle = COLOR_GREY;
+    ctx.fillText("Input", x + 8, y + lineH);
+    rows.forEach((row, index) => {
+      ctx.fillStyle = index === 1 ? COLOR_YELLOW : COLOR_WHITE;
+      ctx.fillText(row.substring(0, 50), x + 8, y + (index + 2) * lineH);
+    });
+  }
+
+  private controlName(control: string): string {
+    return control.replace(/^Key:/, "").replace(/^Mouse:/, "Mouse ");
   }
 
   destroy(): void {
