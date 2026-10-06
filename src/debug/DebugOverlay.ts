@@ -1,8 +1,6 @@
 import { assert } from "./Assert";
 import { FrameStats } from "./FrameStats";
 import { Logger } from "./Logger";
-import type { InputManager } from "../core/input/InputManager";
-import { Gameplay } from "../core/game/Gameplay";
 
 const FRAME_MS_GREEN = 10; // < 10ms: good
 const FRAME_MS_YELLOW = 14; // < 14ms: acceptable
@@ -20,15 +18,12 @@ export class DebugOverlay {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private visible = true;
-  private inputManager: InputManager;
 
-  constructor(parentElement: HTMLElement, inputManager: InputManager) {
+  constructor(parentElement: HTMLElement) {
     this.canvas = document.createElement("canvas");
     this.canvas.style.zIndex = "10000";
     this.canvas.style.pointerEvents = "none";
     parentElement.appendChild(this.canvas);
-
-    this.inputManager = inputManager;
 
     const ctx = this.canvas.getContext("2d");
     assert(ctx !== null, "Failed to get 2D context for debug overlay canvas", {
@@ -57,8 +52,6 @@ export class DebugOverlay {
   }
 
   render(gpuTimings?: Map<string, number>): void {
-    if (this.inputManager.justPressed("debug")) this.toggle();
-
     if (!this.visible) return;
 
     const ctx = this.ctx;
@@ -67,12 +60,6 @@ export class DebugOverlay {
     const frameSnap = FrameStats.snapshot();
     const smooth = frameSnap.smooth;
     const raw = frameSnap.raw;
-
-    // === Input Snapshot ===
-    const inputSnap = this.inputManager.snapshot();
-
-    // === Gameplay Snapshot ===
-    const gameplaySnap = Gameplay.snapshot();
 
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     ctx.font = FONT;
@@ -101,35 +88,6 @@ export class DebugOverlay {
         label: "GC pauses",
         value: String(raw["gcPauses"] ?? 0),
         color: (raw["gcPauses"] ?? 0) > 0 ? COLOR_RED : COLOR_GREEN,
-      },
-      {
-        label: "Position",
-        value: this.join([
-          gameplaySnap.player.x.toFixed(2),
-          gameplaySnap.player.y.toFixed(2),
-          gameplaySnap.player.z.toFixed(2),
-        ]),
-      },
-      {
-        label: "Look",
-        value: this.join([
-          gameplaySnap.player.yaw.toFixed(2),
-          gameplaySnap.player.pitch.toFixed(2),
-        ]),
-      },
-      {
-        label: "Input",
-        value: this.join(
-          inputSnap.map((a) => this.inputControlsStr(a.activeControls)),
-        ),
-      },
-      {
-        label: "Actions",
-        value: this.join(
-          inputSnap.map(
-            (a) => `${a.action}[${this.inputControlsStr(a.activeControls)}]`,
-          ),
-        ),
       },
     ];
 
@@ -183,17 +141,5 @@ export class DebugOverlay {
     if (ms < FRAME_MS_GREEN) return COLOR_GREEN;
     if (ms < FRAME_MS_YELLOW) return COLOR_YELLOW;
     return COLOR_RED;
-  }
-
-  private join(arr: Array<string | number>, sep = ", "): string {
-    return arr.map((v) => String(v)).join(sep);
-  }
-
-  /**
-   * Formats a list of input controls into a string.
-   * Also removes key: from Key:KeyW to save space
-   */
-  private inputControlsStr(activeControls: readonly string[]): string {
-    return this.join(activeControls.map((c) => c.replace(/^Key:/, "")));
   }
 }

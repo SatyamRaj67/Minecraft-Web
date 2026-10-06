@@ -4,9 +4,6 @@ import { FrameStats } from "../debug/FrameStats";
 import { Logger } from "../debug/Logger";
 import { GPUContext } from "../gpu/gpuContext";
 import { Renderer } from "../renderer/Renderer";
-import { Gameplay } from "./game/Gameplay";
-import { GameplayContext } from "./game/Actions";
-import { InputManager } from "./input/InputManager";
 
 export interface EngineConfig {
   canvas: HTMLCanvasElement;
@@ -17,9 +14,6 @@ export class Engine {
   private running: boolean = false;
   private lastTimestamp: number = 0;
   private rafHandle: number | null = null;
-
-  private inputManager!: InputManager;
-  private game!: Gameplay;
 
   private debugOverlay!: DebugOverlay;
 
@@ -35,19 +29,11 @@ export class Engine {
     });
 
     this.renderer = new Renderer(gpu.device, gpu.context, gpu.format);
-    this.renderer.init(config.canvas.clientWidth, config.canvas.clientHeight);
-
-    this.inputManager = new InputManager(config.canvas);
-    this.inputManager.push(GameplayContext);
-
-    this.game = new Gameplay(this.inputManager);
-
-    this.inputManager.onPointerLockLost = () => this.game.openPause();
+    this.renderer.init(config.canvas.width, config.canvas.height);
 
     // === Debug Overlay ===
     this.debugOverlay = new DebugOverlay(
       config.canvas.parentElement ?? document.body,
-      this.inputManager,
     );
     this.debugOverlay.resize(
       config.canvas.clientWidth,
@@ -61,6 +47,7 @@ export class Engine {
 
       config.canvas.width = w;
       config.canvas.height = h;
+      this.renderer.resize(w, h);
       this.debugOverlay.resize(w, h);
     });
     resizeObserver.observe(config.canvas);
@@ -94,12 +81,6 @@ export class Engine {
 
     if (dt > 0.1) dt = 0.1; // clamp to 100ms
     FrameStats.beginFrame();
-
-    // Render Frame
-    this.inputManager.update();
-    this.game.update(dt);
-
-    this.renderer.renderFrame();
 
     this.debugOverlay.render();
 
