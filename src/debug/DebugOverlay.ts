@@ -1,5 +1,6 @@
+import type { InputManager } from "../core/input/InputManager";
 import { assert } from "./Assert";
-import { FrameStats } from "./FrameStats";
+import { FrameStats } from "./stats/FrameStats";
 import { Logger } from "./Logger";
 
 const FRAME_MS_GREEN = 10; // < 10ms: good
@@ -19,7 +20,9 @@ export class DebugOverlay {
   private ctx: CanvasRenderingContext2D;
   private visible = true;
 
-  constructor(parentElement: HTMLElement) {
+  private inputManager: InputManager;
+
+  constructor(parentElement: HTMLElement, inputManager: InputManager) {
     this.canvas = document.createElement("canvas");
     this.canvas.style.zIndex = "10000";
     this.canvas.style.pointerEvents = "none";
@@ -30,6 +33,8 @@ export class DebugOverlay {
       canvas: this.canvas,
     });
     this.ctx = ctx!;
+
+    this.inputManager = inputManager;
 
     Logger.info("DebugOverlay: initialized (press F3 to toggle)");
   }
@@ -61,6 +66,10 @@ export class DebugOverlay {
     const smooth = frameSnap.smooth;
     const raw = frameSnap.raw;
 
+    // === Input Snapshot ===
+    const inputSnap = this.inputManager.InputSnapshot;
+
+    // === Canvas Rendering ===
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     ctx.font = FONT;
 
@@ -88,6 +97,25 @@ export class DebugOverlay {
         label: "GC pauses",
         value: String(raw["gcPauses"] ?? 0),
         color: (raw["gcPauses"] ?? 0) > 0 ? COLOR_RED : COLOR_GREEN,
+      },
+      {
+        label: "Position",
+        value: `(${inputSnap.player.position[0].toFixed(1)}, ${inputSnap.player.position[1].toFixed(1)}, ${inputSnap.player.position[2].toFixed(1)})`,
+      },
+      {
+        label: "Rotation",
+        value: `(${inputSnap.player.rotation[0].toFixed(1)}°, ${inputSnap.player.rotation[1].toFixed(1)}°)`,
+      },
+      {
+        label: "Held",
+        value:
+          inputSnap.held.length > 0
+            ? Array.from(inputSnap.held).join(", ")
+            : "None",
+      },
+      {
+        label: "Mouse Delta",
+        value: `(${inputSnap.rawMouseDelta.x.toFixed(1)}, ${inputSnap.rawMouseDelta.y.toFixed(1)})`,
       },
     ];
 

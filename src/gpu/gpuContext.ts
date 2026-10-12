@@ -17,6 +17,10 @@ export interface GPUContextResult {
   features: GPUSupportedFeatures;
 }
 
+const REQUIRED_FEATURES: GPUFeatureName[] = [];
+
+const OPTIONAL_FEATURES: GPUFeatureName[] = ["timestamp-query"];
+
 export class GPUContext {
   static adapterInfo: GPUAdapterInfo | null = null;
   static hasTimestampQuery: boolean = false;
@@ -44,11 +48,21 @@ export class GPUContext {
           "This may indicate the GPU is blacklisted or the broswer flag is not set.",
       );
     }
+
     this.adapterInfo = adapter.info;
-    this.hasTimestampQuery = adapter.features.has("timestamp-query");
     Logger.info(
       `GPU Adapter: ${this.adapterInfo.vendor} / ${this.adapterInfo.device}`,
     );
+
+    // === Features supported by GPU Device ===
+    const enabledFeatures: GPUFeatureName[] = [...REQUIRED_FEATURES];
+    for (const feature of OPTIONAL_FEATURES) {
+      if (adapter.features.has(feature)) {
+        enabledFeatures.push(feature);
+        Logger.verbose("GPUContext", `Optional Feature Enabled: ${feature}`);
+      }
+    }
+    this.hasTimestampQuery = enabledFeatures.includes("timestamp-query");
 
     // === Request GPU Device ===
     const device = await adapter.requestDevice({

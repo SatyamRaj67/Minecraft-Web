@@ -1,9 +1,11 @@
 import { assert } from "../debug/Assert";
 import { DebugOverlay } from "../debug/DebugOverlay";
-import { FrameStats } from "../debug/FrameStats";
+import { FrameStats } from "../debug/stats/FrameStats";
 import { Logger } from "../debug/Logger";
 import { GPUContext } from "../gpu/gpuContext";
 import { Renderer } from "../renderer/Renderer";
+import { InputManager } from "./input/InputManager";
+import { Player } from "./player/Player";
 
 export interface EngineConfig {
   canvas: HTMLCanvasElement;
@@ -14,6 +16,9 @@ export class Engine {
   private running: boolean = false;
   private lastTimestamp: number = 0;
   private rafHandle: number | null = null;
+
+  private player!: Player;
+  private inputManager!: InputManager;
 
   private debugOverlay!: DebugOverlay;
 
@@ -28,12 +33,23 @@ export class Engine {
       validation: __DEV__,
     });
 
-    this.renderer = new Renderer(gpu.device, gpu.context, gpu.format);
+    this.player = new Player();
+
+    this.renderer = new Renderer(
+      gpu.device,
+      gpu.context,
+      gpu.format,
+      this.player,
+    );
+    
     this.renderer.init(config.canvas.width, config.canvas.height);
+
+    this.inputManager = new InputManager(config.canvas, this.player);
 
     // === Debug Overlay ===
     this.debugOverlay = new DebugOverlay(
       config.canvas.parentElement ?? document.body,
+      this.inputManager,
     );
     this.debugOverlay.resize(
       config.canvas.clientWidth,
@@ -83,6 +99,8 @@ export class Engine {
     FrameStats.beginFrame();
 
     this.debugOverlay.render();
+    this.inputManager.update(dt);
+    this.renderer.update();
 
     FrameStats.endFrame();
     this.rafHandle = requestAnimationFrame((ts) => this.loop(ts));
