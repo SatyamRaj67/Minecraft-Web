@@ -33,23 +33,23 @@ export class Engine {
       validation: __DEV__,
     });
 
-    this.player = new Player();
+    this.inputManager = new InputManager(config.canvas);
+    this.player = new Player(this.inputManager);
 
+    // ===  Renderer ===
     this.renderer = new Renderer(
       gpu.device,
       gpu.context,
       gpu.format,
       this.player,
     );
-    
     this.renderer.init(config.canvas.width, config.canvas.height);
-
-    this.inputManager = new InputManager(config.canvas, this.player);
 
     // === Debug Overlay ===
     this.debugOverlay = new DebugOverlay(
       config.canvas.parentElement ?? document.body,
       this.inputManager,
+      this.player,
     );
     this.debugOverlay.resize(
       config.canvas.clientWidth,
@@ -98,8 +98,8 @@ export class Engine {
     if (dt > 0.1) dt = 0.1; // clamp to 100ms
     FrameStats.beginFrame();
 
+    this.player.update(dt);
     this.debugOverlay.render();
-    this.inputManager.update(dt);
     this.renderer.update();
 
     FrameStats.endFrame();

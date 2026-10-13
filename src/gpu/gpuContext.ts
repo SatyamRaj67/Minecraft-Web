@@ -64,12 +64,13 @@ export class GPUContext {
     }
     this.hasTimestampQuery = enabledFeatures.includes("timestamp-query");
 
-    // === Request GPU Device ===
+    // === GPU Device ===
     const device = await adapter.requestDevice({
+      requiredFeatures: enabledFeatures,
       label: "Minecraft Web Device",
     });
 
-    // === Get Canvas Context ===
+    // === Canvas Context ===
     const context = opts.canvas.getContext("webgpu") as GPUCanvasContext;
     assert(context !== null, "Failed to get WebGPU canvas context");
 
@@ -77,14 +78,15 @@ export class GPUContext {
     context.configure({
       device,
       format,
-      alphaMode: "premultiplied",
     });
+
+    Logger.info(`GPUContext: Initialized. Format: ${format}`);
 
     return {
       device,
       context,
       format,
-      adapterInfo: this.adapterInfo!,
+      adapterInfo: this.adapterInfo,
       limits: adapter.limits,
       features: adapter.features,
     };

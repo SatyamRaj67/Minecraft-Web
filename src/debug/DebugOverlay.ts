@@ -2,6 +2,7 @@ import type { InputManager } from "../core/input/InputManager";
 import { assert } from "./Assert";
 import { FrameStats } from "./stats/FrameStats";
 import { Logger } from "./Logger";
+import type { Player } from "../core/player/Player";
 
 const FRAME_MS_GREEN = 10; // < 10ms: good
 const FRAME_MS_YELLOW = 14; // < 14ms: acceptable
@@ -21,8 +22,13 @@ export class DebugOverlay {
   private visible = true;
 
   private inputManager: InputManager;
+  private player: Player;
 
-  constructor(parentElement: HTMLElement, inputManager: InputManager) {
+  constructor(
+    parentElement: HTMLElement,
+    inputManager: InputManager,
+    player: Player,
+  ) {
     this.canvas = document.createElement("canvas");
     this.canvas.style.zIndex = "10000";
     this.canvas.style.pointerEvents = "none";
@@ -35,6 +41,7 @@ export class DebugOverlay {
     this.ctx = ctx!;
 
     this.inputManager = inputManager;
+    this.player = player;
 
     Logger.info("DebugOverlay: initialized (press F3 to toggle)");
   }
@@ -56,7 +63,7 @@ export class DebugOverlay {
     this.canvas.height = height;
   }
 
-  render(gpuTimings?: Map<string, number>): void {
+  render(): void {
     if (!this.visible) return;
 
     const ctx = this.ctx;
@@ -68,6 +75,9 @@ export class DebugOverlay {
 
     // === Input Snapshot ===
     const inputSnap = this.inputManager.InputSnapshot;
+
+    // === Player Snapshot ===
+    const playerSnap = this.player.PlayerSnap;
 
     // === Canvas Rendering ===
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -87,8 +97,10 @@ export class DebugOverlay {
       },
       {
         label: "GPU",
-        value: gpuTimings ? this.msStr(gpuTimings.get("total") ?? 0) : "?ms",
-        color: this.frameColor(gpuTimings?.get("total") ?? 0),
+        value: this.msStr(FrameStats.getSmooth(FrameStats.KEY.GPU_FRAME_MS)),
+        color: this.frameColor(
+          FrameStats.getSmooth(FrameStats.KEY.GPU_FRAME_MS),
+        ),
       },
       { label: "Triangles", value: this.kStr(smooth["triangles"] ?? 0) },
       { label: "VRAM est.", value: this.mbStr(raw["vramBytes"] ?? 0) },
@@ -100,11 +112,11 @@ export class DebugOverlay {
       },
       {
         label: "Position",
-        value: `(${inputSnap.player.position[0].toFixed(1)}, ${inputSnap.player.position[1].toFixed(1)}, ${inputSnap.player.position[2].toFixed(1)})`,
+        value: `(${playerSnap.position[0].toFixed(1)}, ${playerSnap.position[1].toFixed(1)}, ${playerSnap.position[2].toFixed(1)})`,
       },
       {
         label: "Rotation",
-        value: `(${inputSnap.player.rotation[0].toFixed(1)}°, ${inputSnap.player.rotation[1].toFixed(1)}°)`,
+        value: `(${playerSnap.rotation[0].toFixed(1)}°, ${playerSnap.rotation[1].toFixed(1)}°)`,
       },
       {
         label: "Held",
@@ -112,10 +124,6 @@ export class DebugOverlay {
           inputSnap.held.length > 0
             ? Array.from(inputSnap.held).join(", ")
             : "None",
-      },
-      {
-        label: "Mouse Delta",
-        value: `(${inputSnap.rawMouseDelta.x.toFixed(1)}, ${inputSnap.rawMouseDelta.y.toFixed(1)})`,
       },
     ];
 
