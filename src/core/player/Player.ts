@@ -5,12 +5,16 @@ const MOVE_SPEED = 5;
 const MOUSE_SENSITIVITY = 0.15;
 const MAX_PITCH = 89;
 
+const JUMP_VELOCITY = 10;
+const GRAVITY = -36;
+
 export class Player {
   position: [number, number, number];
   velocity: [number, number, number];
   rotation: [number, number];
 
   private inputManager: InputManager;
+  private jumpWasHeld = false;
 
   constructor(inputManager: InputManager) {
     this.position = [0, 0, 0];
@@ -33,8 +37,13 @@ export class Player {
     if (this.inputManager.isHeld("Key:KeyD")) this.velocity[0] += 1;
     if (this.inputManager.isHeld("Key:KeyW")) this.velocity[2] -= 1;
     if (this.inputManager.isHeld("Key:KeyS")) this.velocity[2] += 1;
-    if (this.inputManager.isHeld("Key:Space")) this.velocity[1] += 1;
-    if (this.inputManager.isHeld("Key:ShiftLeft")) this.velocity[1] -= 1;
+
+    const jumpHeld = this.inputManager.isHeld("Key:Space");
+    const isGrounded = this.position[1] <= 0;
+    if (jumpHeld && !this.jumpWasHeld && isGrounded) {
+      this.velocity[1] = JUMP_VELOCITY;
+    }
+    this.jumpWasHeld = jumpHeld;
 
     const length = Math.hypot(this.velocity[0], this.velocity[2]);
     if (length > 0) {
@@ -42,7 +51,10 @@ export class Player {
       this.velocity[2] /= length;
     }
 
+    this.velocity[1] += GRAVITY * dt; // Apply gravity
+
     const localX = this.velocity[0];
+    const localY = this.velocity[1];
     const localZ = this.velocity[2];
 
     const yaw = (this.rotation[0] * Math.PI) / 180;
@@ -50,7 +62,13 @@ export class Player {
     const worldZ = -localX * Math.sin(yaw) + localZ * Math.cos(yaw);
 
     this.position[0] += worldX * MOVE_SPEED * dt;
+    this.position[1] += localY * dt;
     this.position[2] += worldZ * MOVE_SPEED * dt;
+
+    if (this.position[1] < 0) {
+      this.position[1] = 0;
+      this.velocity[1] = 0;
+    }
     this.velocity[0] = 0;
     this.velocity[2] = 0;
   }
