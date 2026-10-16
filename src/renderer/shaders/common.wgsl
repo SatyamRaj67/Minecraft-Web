@@ -9,7 +9,7 @@ struct GlobalUniforms {
 var<uniform> uGlobals: GlobalUniforms;
 
 struct VertIn {
-    @builtin(vertex_index) vertexIndex: u32,
+    @location(0) position: vec3<f32>,
 }
 
 struct VertOut {
@@ -19,18 +19,9 @@ struct VertOut {
 @vertex
 fn vs_main(input: VertIn) -> VertOut {
     var output: VertOut;
-    var positions = array(
-        vec3f(-0.7, -0.5, 0.0),
-        vec3f(0.7, -0.5, 0.0),
-        vec3f(0.0, 0.7, 0.0),
-        );
-
-    let worldPosition = vec4f(positions[input.vertexIndex], 1.0);
-    output.position =
-        uGlobals.projectionMatrix *
-        uGlobals.viewMatrix *
-        uGlobals.modelMatrix *
-        worldPosition;
+    let worldPosition = vec4f(input.position, 1.0);
+    output.position = uGlobals.projectionMatrix * uGlobals.viewMatrix * uGlobals.modelMatrix
+        * worldPosition;
 
     return output;
 }

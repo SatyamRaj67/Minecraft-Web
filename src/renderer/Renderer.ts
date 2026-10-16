@@ -13,6 +13,10 @@ export class Renderer {
   private globalsBuffer!: GPUBuffer;
   private globalsBindGroup!: GPUBindGroup;
 
+  private vertexBuffer!: GPUBuffer;
+  private indexBuffer!: GPUBuffer;
+  private indexCount = 0;
+
   private timestamp!: Timestamp;
 
   constructor(
@@ -36,6 +40,18 @@ export class Renderer {
       vertex: {
         module,
         entryPoint: "vs_main",
+        buffers: [
+          {
+            arrayStride: 3 * Float32Array.BYTES_PER_ELEMENT,
+            attributes: [
+              {
+                shaderLocation: 0,
+                offset: 0,
+                format: "float32x3",
+              },
+            ],
+          },
+        ],
       },
       fragment: {
         module,
@@ -46,6 +62,24 @@ export class Renderer {
         topology: "triangle-list",
       },
     });
+
+    const vertices = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0]);
+    const indices = new Uint16Array([0, 1, 2, 1, 2, 3]);
+
+    this.vertexBuffer = this.device.createBuffer({
+      label: "Vertices Buffer",
+      size: vertices.byteLength,
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+    });
+    this.device.queue.writeBuffer(this.vertexBuffer, 0, vertices);
+
+    this.indexBuffer = this.device.createBuffer({
+      label: "Indices Buffer",
+      size: indices.byteLength,
+      usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+    });
+    this.device.queue.writeBuffer(this.indexBuffer, 0, indices);
+    this.indexCount = indices.length;
 
     this.globalsBuffer = this.device.createBuffer({
       label: "Global MVP Uniforms",
@@ -105,7 +139,9 @@ export class Renderer {
 
     pass.setPipeline(this.pipeline);
     pass.setBindGroup(0, this.globalsBindGroup);
-    pass.draw(3);
+    pass.setVertexBuffer(0, this.vertexBuffer);
+    pass.setIndexBuffer(this.indexBuffer, "uint16");
+    pass.drawIndexed(this.indexCount);
     pass.end();
 
     const commandBuffer = encoder.finish();
@@ -122,6 +158,8 @@ export class Renderer {
   }
 
   destroy(): void {
+    this.vertexBuffer.destroy();
+    this.indexBuffer.destroy();
     this.globalsBuffer.destroy();
     Logger.info("Renderer: destroyed");
   }

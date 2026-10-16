@@ -14,6 +14,12 @@ GPUQueue.prototype.submit = (function (origFn) {
   };
 })(GPUQueue.prototype.submit);
 
+type TimestampState =
+  | "free"
+  | "need_resolve"
+  | "wait_for_result"
+  | "need_finish";
+
 export default class Timestamp {
   private device: GPUDevice;
   private hasTimestampQuery: boolean = false;
@@ -24,8 +30,7 @@ export default class Timestamp {
   private resultBuffers: GPUBuffer[] = [];
   private commandBuffer: GPUCommandBuffer | undefined = undefined;
 
-  private state: "free" | "need_resolve" | "wait_for_result" | "need_finish" =
-    "free";
+  private state: TimestampState = "free";
 
   constructor(device: GPUDevice) {
     this.device = device;
@@ -44,29 +49,47 @@ export default class Timestamp {
 
   private beginTimestampPass(
     encoder: GPUCommandEncoder,
+    fnName: "beginRenderPass",
+    descriptor: GPURenderPassDescriptor,
+  ): GPURenderPassEncoder;
+  private beginTimestampPass(
+    encoder: GPUCommandEncoder,
+    fnName: "beginComputePass",
+    descriptor: GPUComputePassDescriptor,
+  ): GPUComputePassEncoder;
+
+  private beginTimestampPass(
+    encoder: GPUCommandEncoder,
     fnName: "beginRenderPass" | "beginComputePass" = "beginRenderPass",
     descriptor: GPURenderPassDescriptor | GPUComputePassDescriptor,
   ): GPURenderPassEncoder | GPUComputePassEncoder {
-    if (!this.hasTimestampQuery || !this.querySet)
-      // @ts-ignore
-      return encoder[fnName](descriptor);
+    if (!this.hasTimestampQuery || !this.querySet) {
+      return fnName === "beginRenderPass"
+        ? encoder.beginRenderPass(descriptor as GPURenderPassDescriptor)
+        : encoder.beginComputePass(descriptor as GPUComputePassDescriptor);
+    }
     assert(
       this.state === "free",
       "Timestamp: beginTimestampPass called while not in free state",
     );
     this.state = "need_resolve";
 
-    // @ts-ignore
-    const pass = encoder[fnName]({
-      ...descriptor,
-      ...{
-        timestampWrites: {
-          querySet: this.querySet,
-          beginningOfPassWriteIndex: 0,
-          endOfPassWriteIndex: 1,
-        },
-      },
-    });
+    const timestampWrites = {
+      querySet: this.querySet,
+      beginningOfPassWriteIndex: 0,
+      endOfPassWriteIndex: 1,
+    };
+
+    const pass =
+      fnName === "beginRenderPass"
+        ? encoder.beginRenderPass({
+            ...(descriptor as GPURenderPassDescriptor),
+            timestampWrites,
+          })
+        : encoder.beginComputePass({
+            ...(descriptor as GPUComputePassDescriptor),
+            timestampWrites,
+          });
 
     const resolve = () => this.resolveTiming(encoder);
     const trackCommandBuffer = (cb: GPUCommandBuffer) =>
@@ -94,7 +117,6 @@ export default class Timestamp {
     encoder: GPUCommandEncoder,
     descriptor: GPURenderPassDescriptor,
   ): GPURenderPassEncoder {
-    // @ts-ignore
     return this.beginTimestampPass(encoder, "beginRenderPass", descriptor);
   }
 
@@ -102,7 +124,6 @@ export default class Timestamp {
     encoder: GPUCommandEncoder,
     descriptor: GPUComputePassDescriptor,
   ): GPUComputePassEncoder {
-    // @ts-ignore
     return this.beginTimestampPass(encoder, "beginComputePass", descriptor);
   }
 
@@ -143,7 +164,7 @@ export default class Timestamp {
     if (!this.hasTimestampQuery) return;
     assert(
       this.state === "need_finish",
-      "Timestamp: trackCommandBuffer called while not in wait_for_result state",
+      "Timestamp: trackCommandBuffer called while not in need_finish state",
     );
     s_unsubmittedCommandBuffer.add(cb);
     this.commandBuffer = cb;
@@ -174,7 +195,7 @@ export default class Timestamp {
     await resultBuffer.mapAsync(GPUMapMode.READ);
     const times = new BigUint64Array(resultBuffer.getMappedRange());
     // WebGPU timestamp values are expressed in nanoseconds.
-    const durationMs = Number(times[1]! - times[0]!) / 1_000_000;
+    const durationMs = Number(times[1]! - times[0]!) / 1_000_000; // ms
     resultBuffer.unmap();
     this.resultBuffers.push(resultBuffer);
     return durationMs;

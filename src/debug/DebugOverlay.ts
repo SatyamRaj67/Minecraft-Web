@@ -102,6 +102,17 @@ export class DebugOverlay {
           FrameStats.getSmooth(FrameStats.KEY.GPU_FRAME_MS),
         ),
       },
+      {
+        label: "Total",
+        value: this.msStr(
+          (smooth["cpuFrameMs"] ?? 0) +
+            FrameStats.getSmooth(FrameStats.KEY.GPU_FRAME_MS),
+        ),
+        color: this.frameColor(
+          (smooth["cpuFrameMs"] ?? 0) +
+            FrameStats.getSmooth(FrameStats.KEY.GPU_FRAME_MS),
+        ),
+      },
       { label: "Triangles", value: this.kStr(smooth["triangles"] ?? 0) },
       { label: "VRAM est.", value: this.mbStr(raw["vramBytes"] ?? 0) },
       { label: "JS Heap", value: this.mbStr(raw["jsHeapBytes"] ?? 0) },

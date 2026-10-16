@@ -1,6 +1,7 @@
 const EMA_ALPHA = 0.1;
 
 enum MetricKey {
+  FRAME_MS = "frameMs",
   CPU_FRAME_MS = "cpuFrameMs",
   GPU_FRAME_MS = "gpuFrameMs",
   TRIANGLES = "triangles",
