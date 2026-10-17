@@ -103,7 +103,7 @@ export class Renderer {
     });
 
     this.texture = await this.textures.createTexture(
-      "/assets/grass_block_side.png",
+      `${import.meta.env.BASE_URL}assets/grass_block_side.png`,
     );
 
     // === Bind Groups ===
