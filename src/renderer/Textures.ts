@@ -22,12 +22,21 @@ export class Textures {
         GPUTextureUsage.COPY_DST |
         GPUTextureUsage.RENDER_ATTACHMENT,
     });
+    this.device.queue.copyExternalImageToTexture(
+      { source, flipY: true },
+      { texture },
+      { width: source.width, height: source.height },
+    );
+    source.close();
     return texture;
   }
 
   //   === Private Methods ===
   private async loadImageBitmap(url: string): Promise<ImageBitmap> {
     const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Failed to load texture "${url}": ${response.status}`);
+    }
     const blob = await response.blob();
     return await createImageBitmap(blob);
   }

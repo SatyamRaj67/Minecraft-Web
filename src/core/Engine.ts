@@ -43,7 +43,7 @@ export class Engine {
       gpu.format,
       this.player,
     );
-    this.renderer.init(config.canvas.width, config.canvas.height);
+    await this.renderer.init(config.canvas.width, config.canvas.height);
 
     // === Debug Overlay ===
     this.debugOverlay = new DebugOverlay(

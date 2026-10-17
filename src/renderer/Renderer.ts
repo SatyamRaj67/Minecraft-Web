@@ -4,6 +4,7 @@ import { Player } from "../core/player/Player";
 import commonModuleWGSL from "./shaders/common.wgsl?raw";
 import { mat4 } from "wgpu-matrix";
 import Timestamp from "./Timestamp";
+import { Textures } from "./Textures";
 
 export class Renderer {
   private width: number = 1;
@@ -12,6 +13,8 @@ export class Renderer {
   private pipeline!: GPURenderPipeline;
   private globalsBuffer!: GPUBuffer;
   private globalsBindGroup!: GPUBindGroup;
+  private textureBindGroup!: GPUBindGroup;
+  private texture!: GPUTexture;
 
   private vertexBuffer!: GPUBuffer;
   private indexBuffer!: GPUBuffer;
@@ -26,14 +29,18 @@ export class Renderer {
     private player: Player,
   ) {
     this.player = player;
+    this.textures = new Textures(device);
   }
 
-  init(width: number, height: number): void {
+  private textures: Textures;
+
+  async init(width: number, height: number): Promise<void> {
     const module = this.device.createShaderModule({
       label: "Common Module",
       code: commonModuleWGSL,
     });
 
+    // === Pipeline ===
     this.pipeline = this.device.createRenderPipeline({
       label: "Triangle Pipeline",
       layout: "auto",
@@ -42,12 +49,17 @@ export class Renderer {
         entryPoint: "vs_main",
         buffers: [
           {
-            arrayStride: 3 * Float32Array.BYTES_PER_ELEMENT,
+            arrayStride: 5 * Float32Array.BYTES_PER_ELEMENT,
             attributes: [
               {
                 shaderLocation: 0,
                 offset: 0,
                 format: "float32x3",
+              },
+              {
+                shaderLocation: 1,
+                offset: 3 * Float32Array.BYTES_PER_ELEMENT,
+                format: "float32x2",
               },
             ],
           },
@@ -63,7 +75,10 @@ export class Renderer {
       },
     });
 
-    const vertices = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0]);
+    // === Buffers ===
+    const vertices = new Float32Array([
+      0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1, 0, 1, 1,
+    ]);
     const indices = new Uint16Array([0, 1, 2, 1, 2, 3]);
 
     this.vertexBuffer = this.device.createBuffer({
@@ -87,12 +102,32 @@ export class Renderer {
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
+    this.texture = await this.textures.createTexture(
+      "/assets/grass_block_side.png",
+    );
+
+    // === Bind Groups ===
     this.globalsBindGroup = this.device.createBindGroup({
       label: "Global MVP Bind Group",
       layout: this.pipeline.getBindGroupLayout(0),
       entries: [{ binding: 0, resource: { buffer: this.globalsBuffer } }],
     });
+    this.textureBindGroup = this.device.createBindGroup({
+      label: "Texture Bind Group",
+      layout: this.pipeline.getBindGroupLayout(1),
+      entries: [
+        {
+          binding: 0,
+          resource: this.device.createSampler({
+            magFilter: "nearest",
+            minFilter: "nearest",
+          }),
+        },
+        { binding: 1, resource: this.texture.createView() },
+      ],
+    });
 
+    // === Timestamp ===
     this.timestamp = new Timestamp(this.device);
 
     this.resize(width, height);
@@ -139,6 +174,7 @@ export class Renderer {
 
     pass.setPipeline(this.pipeline);
     pass.setBindGroup(0, this.globalsBindGroup);
+    pass.setBindGroup(1, this.textureBindGroup);
     pass.setVertexBuffer(0, this.vertexBuffer);
     pass.setIndexBuffer(this.indexBuffer, "uint16");
     pass.drawIndexed(this.indexCount);
@@ -161,6 +197,7 @@ export class Renderer {
     this.vertexBuffer.destroy();
     this.indexBuffer.destroy();
     this.globalsBuffer.destroy();
+    this.texture.destroy();
     Logger.info("Renderer: destroyed");
   }
 }
